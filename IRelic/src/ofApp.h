@@ -1,16 +1,15 @@
 #pragma once
 
 #include "ofMain.h"
-#include "Lib\ImagerIPC2.h"
 
 #include <stdio.h>
 #include <math.h>
-#include <queue>
+
 #include <vector>
 #include <map>
 #include <cstdlib>
 
-#include "ofxOpenCv.h"
+
 #include "ofxGui.h"
 
 
@@ -19,19 +18,7 @@
 #include "dirtParticle.h"
 #include "communicator.h"
 
-
-void InitIPC(void);
-void ReleaseIPC(void);
-void Idle(void);
-void HandleEvents(void);
-void Init(int frameWidth, int frameHeight, int frameDepth);
-BYTE clip(int val);
-void GetBitmap_Limits(short* buf, int FrameSize, short *min, short *max, bool Sigma);
-
-HRESULT WINAPI OnServerStopped(int reason);
-HRESULT WINAPI OnInitCompleted(void);
-HRESULT WINAPI OnFrameInit(int frameWidth, int frameHeight, int frameDepth);
-HRESULT WINAPI OnNewFrame(void * pBuffer, FrameMetadata *pMetadata);
+#include "cameraipc.h"
 
 enum ToolStyle { none = 0, knife, brush, dropper };
 enum GameStage { START = 0, PROCESS, END, GAMEOVER };
@@ -219,8 +206,8 @@ class ofApp : public ofBaseApp{
 		ofSoundPlayer shali;
 		ofSoundPlayer saotu;
 		ofSoundPlayer kouxue;
-		ofSoundPlayer baojing;
-		ofSoundPlayer daojishi;
+		//ofSoundPlayer baojing;
+		//ofSoundPlayer daojishi;
 		ofSoundPlayer gamelogicsound;
 		
 
@@ -256,8 +243,8 @@ class ofApp : public ofBaseApp{
 			safeThres2 = thres2;
 		}
 		float timeLimit = 120.0; //120 seconds
-		float dropperstarttime=0;
-		float droppertimer=0;
+		float errTooltime=0;
+		float errcounter=0;
 		float changingtimeLimit = 4000;//2seconds 2000millisecs
 		float changingstarttime=0;
 		float changingtimer=0;

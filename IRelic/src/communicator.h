@@ -21,7 +21,7 @@ public:
 
 	void resetTimer();
 
-	void toolFilter(char t);
+
 
 
 

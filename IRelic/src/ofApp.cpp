@@ -1,27 +1,7 @@
 #include "ofApp.h"
 
 
-//#define POLLING
-#define MAXLEN 1024
-#define SAFE_DELETE(x) { if (x) delete x; x = NULL; }				
-#define DEFER_FPS 5
-// Global Vars:
-HINSTANCE hInst;
-HWND ghWnd = NULL;
-const TCHAR szWindowClass[] = TEXT("StartIPCWin32");
-TCHAR labelConnected[MAXLEN];
-TCHAR labelFrameCounter[MAXLEN];
-TCHAR labelPIF[MAXLEN];
-TCHAR labelFlag[MAXLEN];
-TCHAR labelTarget[MAXLEN];
-queue<ofxCvGrayscaleImage> IRqueue;
-bool ipcInitialized = false;
-bool frameInitialized = false;
-bool Connected = false;
-bool Colors = false;
-bool Painted = false;
-short FrameWidth = 160, FrameHeight = 120, FrameDepth = 2;
-int FrameSize = 19200;
+
 
 int deferfps = 0;
 
@@ -31,13 +11,9 @@ int deferfps = 0;
 int caitao_toollist[5] = { 1,2,3,1,3 };
 
 
-ofxCvGrayscaleImage IRimage;
-ofxCvGrayscaleImage IRimagePrev;
+
 //ofxCvGrayscaleImage IRimagePrevQueue[5];
-unsigned char* pixels = new unsigned char[FrameSize];
-unsigned char* pixelBuffer = new unsigned char[FrameSize]; //use for blending of the motion detect area
-														   //ofPixels pixelBuffer;
-bool newIR;
+
 ofxCvColorImage outloadImage;
 
 
@@ -138,8 +114,10 @@ void ofApp::setup() {
 	shiftx = 160;
 	shifty = 0;
 	times = 6;
+	IR_mtx.lock();
 	IRimagePrev.allocate(160, 120);
 	IRimage.allocate(160, 120);
+	IR_mtx.unlock();
 	diff.allocate(160, 120);
 	//diffFloat.allocate(160, 120);
 	//binaryMotion.allocate(160, 120);
@@ -150,7 +128,7 @@ void ofApp::setup() {
 
 	backgroundImage.loadImage("caitao/1.jpg");
 	foregroundImage.loadImage("caitao/0.jpg");
-	appfont.load("HYQuHeiW 2.ttf",30);
+	appfont.load("HYQuHeiW 2.ttf", 30);
 
 
 	/******************************      SOUND   ************************************/
@@ -158,21 +136,20 @@ void ofApp::setup() {
 	shali.setVolume(0.7);
 	saotu.load("audio/saotu.mp3");
 	saotu.setVolume(0.65);
-	daojishi.load("audio/daojishi.mp3");
+
 	kouxue.load("audio/kouxue.mp3");
-	
 
-	baojing.load("audio/baojing.mp3");
-	baojing.setVolume(0.4);
 
-	daojishi.setLoop(true);
+
+
+
+
 	shali.setMultiPlay(true);
 	saotu.setMultiPlay(true);
-	baojing.setMultiPlay(true);
-	
-	
-	
-	
+
+
+
+
 	//pixelBuffer.allocate(FrameWidth, FrameHeight, OF_IMAGE_GRAYSCALE);
 	for (int i = 0; i < FrameSize; i++) { pixelBuffer[i] = 0; }
 	int width = ofGetWidth();
@@ -207,7 +184,7 @@ void ofApp::setup() {
 
 	//gamelogic setup
 	stage = START;
-	
+
 
 	//============Brian==================
 	//setup particles
@@ -228,26 +205,30 @@ void ofApp::setup() {
 
 	mouse = ofPoint(200, 200);
 	mPos = &mouse;
-	
+
 
 	//setup comms
 	com.setup(9600, "COM3");
 	com.reset();
-	
+
 
 
 }
 
 //--------------------------------------------------------------
 void ofApp::update() {
-	IRtoMotion(IRimage, IRimagePrev);
+	if (IR_mtx.try_lock()) {
+		IRtoMotion(IRimage, IRimagePrev);
+		IR_mtx.unlock();
+	}
+
 	//if (binaryMotion.bAllocated) {
 	//	maskShaderUpdate();
 	//}
 
 	switch (stage) {
 	case START: {
-		if (daojishi.isPlaying()) { daojishi.stop(); }
+
 		//getSwitchStage();
 		if (getButtonState(ButtonStart)) {
 
@@ -263,26 +244,11 @@ void ofApp::update() {
 	case PROCESS: {
 		if (getButtonState(ButtonRestartpro)) {
 			stage = START;
-
-			//THIS PART IS BUGGY!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-			//getButtonState might be broken
 		}
 
-		
-		//baojing logic
-		if (baojing.getPosition() > 0.8) {
-			healthLeft = healthLeft - 5;
-			if (!kouxue.isPlaying()) {
-				kouxue.play();
-			}
-			
-		}
-		
-		
-		
 
 		if (!stepend) {
-			
+
 			//printf("first time process update\n");
 			if (firsttimehere) { //update the step data
 				workingLeft = workingTotal[caitao.currentStep];
@@ -291,140 +257,124 @@ void ofApp::update() {
 				foregroundImage = caitao.ProcessImages[caitao.currentStep];
 
 				for (int i = 0; i < FrameSize; i++) { pixelBuffer[i] = 0; }//clean the pixel Buffer for recording a new step motion
-				if (caitao.Toollist[caitao.currentStep] == dropper) { dropperstarttime = ofGetElapsedTimef(); }
 				firsttimehere = false;
 			}
-			
 
-			if (caitao.Toollist[caitao.currentStep] == dropper) { droppertimer = ofGetElapsedTimef(); }
+
+
 
 			ToolSwitchUpdate();//Brian part
 
 			ToolNow = caitao.Toollist[caitao.currentStep];
 			if (ToolNow == caitao.Toollist[caitao.currentStep]) { //If user is not using the right tool,then nothing updates.
 				maskShaderUpdate();//workingleft is calculated here.
-				
+			}
+			else {
+				currentForce = 0;
+				if(ToolNow!= none)
+					errTooltime++; 
 			}
 
-			if (caitao.Toollist[caitao.currentStep] == knife ) {
-				if (ToolNow != knife) currentForce = 0;
+			if (caitao.Toollist[caitao.currentStep] == knife) {
+				
 				caitaoWidgets.toolparaPercent = ofMap(currentForce, 0.0, forceTotal1, 0.0, 1.0, true);
-				if (Moved && currentForce > safeThres1 && !baojing.isPlaying()) {
-					baojing.play();
-					//healthLeft = healthLeft - 5; 
+				if (Moved && currentForce > safeThres1) {
+					healthLeft = healthLeft - 5; 
 				}//如果力大于thres1 用刀 并且 motion有数
 			}
-			else if (caitao.Toollist[caitao.currentStep] == brush ) {
-				if (ToolNow != brush) currentForce = 0;
+			else if (caitao.Toollist[caitao.currentStep] == brush) {
+				
 				caitaoWidgets.toolparaPercent = ofMap(currentForce, 0.0, forceTotal2, 0.0, 1.0, true);
-				if (Moved  && currentForce > safeThres2 && !baojing.isPlaying()) {
-					baojing.play();
-					//healthLeft = healthLeft - 5;
+				if (Moved  && currentForce > safeThres2) {
+					healthLeft = healthLeft - 5;
 				}//如果力大于thres2 用刷 并且 motion有数
 			}
 			else {
-				caitaoWidgets.toolparaPercent = ofMap(timeLimit - droppertimer + dropperstarttime, 0.0, timeLimit, 0.0, 1.0, true);
-				if (!daojishi.isPlaying()) {
-				daojishi.play();
+				//if the tool is dropper , no health deduction wil be done.
 			}
-				if (caitaoWidgets.toolparaPercent < 0.001) { healthLeft = healthLeft - 5; }
-			}
-			caitaoWidgets.healthPercent = ofMap(healthLeft, 0.0, healthTotal, 0.0, 1.0, true);
-			caitaoWidgets.workingPercent = ofMap((float)workingLeft, 0.0, (float)workingTotal[caitao.currentStep], 0.0, 1.0, true);
-			if (healthLeft < 1) {//gameover
-				if (daojishi.isPlaying()) { daojishi.stop(); }
-				screenshot.grabScreen(0, 0, ofGetWidth(), ofGetHeight());
-				gamelogicsound.load("audio/gg.mp3");
+			
+
+		caitaoWidgets.healthPercent = ofMap(healthLeft, 0.0, healthTotal, 0.0, 1.0, true);
+		caitaoWidgets.workingPercent = ofMap((float)workingLeft, 0.0, (float)workingTotal[caitao.currentStep], 0.0, 1.0, true);
+
+
+		//screenshot.grabScreen(0, 0, ofGetWidth(), ofGetHeight());
+		if (caitaoWidgets.workingPercent < 0.1 && caitao.Toollist[caitao.currentStep] == knife) {
+			stepend = true;
+			firsttimeend = true;
+			//printf("%f\n", caitaoWidgets.workingPercent);
+		}
+		else if (caitaoWidgets.workingPercent < 0.05 && caitao.Toollist[caitao.currentStep] == brush) {
+			stepend = true;
+			firsttimeend = true;
+		}
+		else if (caitaoWidgets.workingPercent < 0.01 && caitao.Toollist[caitao.currentStep] == dropper) {
+			stepend = true;
+			firsttimeend = true;
+		}
+
+
+	}
+	else {
+
+
+		if (firsttimeend) {
+			gamelogicsound.load("audio/stepend.mp3");
+			gamelogicsound.setVolume(0.7);
+			gamelogicsound.play();
+			caitaoWidgets.update(caitao, stepend);
+			changingstarttime = ofGetElapsedTimeMillis();
+			firsttimeend = false;
+			//printf("tukuaiend!\n");
+		}
+		changingtimer = ofGetElapsedTimeMillis();
+		if (changingtimer - changingstarttime > changingtimeLimit) {
+			caitao.currentStep++;
+			firsttimehere = true;
+			stepend = false;
+			if (caitao.currentStep > 4) {
+				gamelogicsound.load("audio/success.mp3");
 				gamelogicsound.setVolume(0.7);
 				gamelogicsound.play();
-				stage = GAMEOVER;
+				stage = END;
 			}
-			if (caitaoWidgets.workingPercent < 0.1 && caitao.Toollist[caitao.currentStep]==knife) {
-				if (daojishi.isPlaying()) { daojishi.stop(); }
-				stepend = true;
-				firsttimeend = true;
-				//printf("%f\n", caitaoWidgets.workingPercent);
-			}
-			else if (caitaoWidgets.workingPercent < 0.05 && caitao.Toollist[caitao.currentStep] == brush) {
-				if (daojishi.isPlaying()) { daojishi.stop(); }
-				stepend = true;
-				firsttimeend = true;
-			}
-			else if (caitaoWidgets.workingPercent < 0.01 && caitao.Toollist[caitao.currentStep] == dropper) {
-				if (daojishi.isPlaying()) { daojishi.stop(); }
-				stepend = true;
-				firsttimeend = true;
-			}
-
-
-		}
-		else {
-
-
-			if (firsttimeend) {
-				gamelogicsound.load("audio/stepend.mp3");
-				gamelogicsound.setVolume(0.7);
-				gamelogicsound.play();
-				caitaoWidgets.update(caitao, stepend);
-				changingstarttime = ofGetElapsedTimeMillis();
-				firsttimeend = false;
-				//printf("tukuaiend!\n");
-			}
-			changingtimer = ofGetElapsedTimeMillis();
-			if (changingtimer - changingstarttime > changingtimeLimit) {
-				caitao.currentStep++;
-				firsttimehere = true;
-				stepend = false;
-				if (caitao.currentStep > 4) {
-					gamelogicsound.load("audio/success.mp3");
-					gamelogicsound.setVolume(0.7);
-					gamelogicsound.play();
-					stage = END;
-				}
-			}
-
-
 		}
 
-		//printf("Moved = %i \n", Moved);
-		emitP = Moved;
-		if (Moved) {
-			ofPoint temp = GetMotionCenter();
-			mouse = GetMotionCenter();
-			//printf("x = %f y = %f", temp.x, temp.y);
-		}
-		
-		break;
+	}
+
+	//printf("Moved = %i \n", Moved);
+	emitP = Moved;
+	if (Moved) {
+		ofPoint temp = GetMotionCenter();
+		mouse = GetMotionCenter();
+		//printf("x = %f y = %f", temp.x, temp.y);
+	}
+
+	break;
 	}
 	case END: {
-		
+
 		if (getButtonState(ButtonRestartend)) {
 			stage = START;
 		}
 		break;
 	}
-	case GAMEOVER: {
-		
-		if (getButtonState(ButtonRestartgameover)) {
-			stage = START;
-		}
-		break;
-	}
+
 	default:
 		printf("something wrong ...stage!=any of the game stages\n"); break;
-	}
+}
 
 
 
 
-	//===================Brian=============================
-	timer = ofGetElapsedTimeMillis() - startTime;
-	
-	
-	particleEffects();
-	// set emitParticles to true when dirt is being removed to allow particles to generate
+//===================Brian=============================
+timer = ofGetElapsedTimeMillis() - startTime;
 
-	com.update();
+
+particleEffects();
+// set emitParticles to true when dirt is being removed to allow particles to generate
+
+com.update();
 
 
 
@@ -440,8 +390,8 @@ void ofApp::draw() {
 	ofBackground(0, 0, 0); //Set up white background
 	ofSetColor(255, 255, 255); //Set color for image drawing
 
-	
-	
+
+
 	switch (stage) {
 	case START: {
 		startbackground.draw(0, 0, 1280, 800);
@@ -457,15 +407,15 @@ void ofApp::draw() {
 		caitaoWidgets.draw();
 		ToolSwitchDraw();
 		ButtonRestartpro.draw();
-		if (ToolNow!= caitao.Toollist[caitao.currentStep]&&ToolNow!=none) {
+		if (ToolNow != caitao.Toollist[caitao.currentStep] && ToolNow != none) {
 			string wrongstr = "Wrong Tool!";
 			appfont.drawString(wrongstr, 1280 / 2 - 50, 415);
 		}
-		
+
 		break;
 	}
 	case END: {
-	
+
 		endbackground.draw(0, 0, 1280, 800);
 		ButtonRestartend.draw();
 
@@ -474,20 +424,15 @@ void ofApp::draw() {
 		scorestr += "%";
 		//appfont.setSpaceSize(100);
 		appfont.drawString(scorestr, 1280 / 2 - 30, 200);
-		
+
 		break;
 	}
-	case GAMEOVER: {
-		screenshot.draw(0, 0);
-		gameoverbackground.draw(0, 0, ofGetWidth(), ofGetHeight());//to see if there is any differences
-		ButtonRestartgameover.draw();
-		break;
-	}
+
 	default:
-		printf("something wrong ...stage!=any of the game stages\n"); break;
+		printf("something wrong ...stage!=any of the game stages\n");
 	}
-	
-	
+
+
 
 	//----------------------------------------------------------
 	//Here is For Test 
@@ -596,7 +541,7 @@ void ofApp::ButtonSetup()
 	ButtonStart.toucharea.set((ButtonStart.x + ButtonStart.w / 2 - shiftx) / 6, (ButtonStart.y + ButtonStart.h / 2 - shifty) / 6);
 
 	ButtonRestartpro.icon.loadImage("interface/restart.png");
-	ButtonRestartpro.setposition(shiftx+10, shifty+30, ButtonRestartpro.icon.getWidth()+30, ButtonRestartpro.icon.getHeight()+30);
+	ButtonRestartpro.setposition(shiftx + 10, shifty + 30, ButtonRestartpro.icon.getWidth() + 30, ButtonRestartpro.icon.getHeight() + 30);
 	ButtonRestartpro.name = "Restart";
 	ButtonRestartpro.toucharea.set((ButtonRestartpro.x + ButtonRestartpro.w / 2 - shiftx) / 6, (ButtonRestartpro.y + ButtonRestartpro.h / 2 - shifty) / 6);
 	//	ButtonHelp.setposition(ofGetWindowSize().x / 2, ofGetWindowSize().y / 2, 200, 100);
@@ -607,12 +552,9 @@ void ofApp::ButtonSetup()
 	ButtonRestartend.name = "Restart";
 	ButtonRestartend.toucharea.set((ButtonRestartend.x + ButtonRestartend.w / 2 - shiftx) / 6, (ButtonRestartend.y + ButtonRestartend.h / 2 - shifty) / 6);
 
-
-	ButtonRestartgameover.icon.loadImage("interface/restartgameover.png");
-	ButtonRestartgameover.setposition(ofGetWindowWidth() / 2 - ButtonRestartgameover.icon.getWidth() / 2, 528 - ButtonRestartgameover.icon.getHeight() / 2, ButtonRestartgameover.icon.getWidth(), ButtonRestartgameover.icon.getHeight());
-	ButtonRestartgameover.name = "Restart";
-	ButtonRestartgameover.toucharea.set((ButtonRestartgameover.x + ButtonRestartgameover.w / 2 - shiftx) / 6, (ButtonRestartgameover.y + ButtonRestartgameover.h / 2 - shifty) / 6);
 }
+	
+	
 bool ofApp::getButtonState(button bu) {
 
 	if (Moved) {
@@ -645,17 +587,17 @@ bool ofApp::getButtonState(button bu) {
 
 ofPoint ofApp::GetMotionCenter()
 {
-	
-	float tempmax=0;
-	int tempi=0;
+
+	float tempmax = 0;
+	int tempi = 0;
 	for (int i = 0; i < contourFinder.nBlobs; i++) {
 		if (tempmax < contourFinder.blobs.at(i).area) {
-			tempmax =  contourFinder.blobs.at(i).area;
+			tempmax = contourFinder.blobs.at(i).area;
 			tempi = i;
 		}
 	}
 	ofPoint a = ofPoint(contourFinder.blobs.at(tempi).centroid.x * 6 + 160, contourFinder.blobs.at(tempi).centroid.y * 6);
-	return a ;
+	return a;
 }
 
 void ofApp::ToolSwitchSetup()
@@ -682,7 +624,7 @@ void ofApp::ToolSwitchUpdate()
 	if (disableForce) {
 		disableForce = false;
 	}
-	
+
 	switch (com.whatTool()) {
 	case 'b':
 		ToolNow = brush;
@@ -693,25 +635,25 @@ void ofApp::ToolSwitchUpdate()
 	case 'p':
 		ToolNow = dropper;
 		break;
-	case '0':
+	case '0': {
 		ToolNow = none;
 		disableForce = true;
 		break;
-	default:
+	}
+	default: {
 		disableForce = true;
 		ToolNow = none;
 	}
+	}
 
 	//get force
-	if (disableForce){
+	if (disableForce) {
 		currentForce = 0;
 	}
 	else if (ToolNow == brush) {
 		// max force = 400
 		// normal force = 374
 		// diff = 20
-
-
 		currentForce = abs(394 - com.getBrushForce());
 	}
 	else if (ToolNow == knife) {
@@ -722,7 +664,7 @@ void ofApp::ToolSwitchUpdate()
 		currentForce = abs(232 - com.getKnifeForce());
 	}
 	else {
-		
+
 		currentForce = 0;
 	}
 
@@ -808,13 +750,13 @@ void ofApp::IRtoMotion(ofxCvGrayscaleImage IR, ofxCvGrayscaleImage IRprev)
 		else {
 			Moved = false;
 		}
-		
+
 	}
 	else { printf("IRimagePrev does not exist\n"); }
 	//printf("%d\n", binaryMotion.getPixels()[17680]);
 
 
-	
+
 	/*
 	if (newIR) {
 		//Store the previous frame, if it exists till now
@@ -831,7 +773,7 @@ void ofApp::IRtoMotion(ofxCvGrayscaleImage IR, ofxCvGrayscaleImage IRprev)
 			//need to convert diff to float image first
 			diffFloat = diff;	//Convert to float image
 			diffFloat *= Amplify;	//Amplify the pixel values
-			
+
 									//Update the accumulation buffer
 			if (!bufferFloat.bAllocated) {
 				//If the buffer is not initialized, then
@@ -846,8 +788,8 @@ void ofApp::IRtoMotion(ofxCvGrayscaleImage IR, ofxCvGrayscaleImage IRprev)
 			}
 			//get binary image
 			binaryMotion = bufferFloat;
-			
-			
+
+
 			if (Adap) {
 				binaryMotion.adaptiveThreshold(AdaptiveThreshold);
 			}
@@ -885,7 +827,7 @@ void ofApp::maskShaderUpdate()
 	//ab.allocate(160, 120,OF_IMAGE_GRAYSCALE);
 	ab = binaryMotion.getPixels();
 
-	
+
 	//unsigned char value;
 	int counter = 0;
 	//printf("%d\n", caitao.OutlineImages[caitao.currentStep].getPixels()[2]);
@@ -897,7 +839,7 @@ void ofApp::maskShaderUpdate()
 			if (caitao.OutlineImages[caitao.currentStep].getPixels()[i] > 0)
 			{
 				workingLeft--;
-				
+
 			}
 		}
 	}
@@ -935,7 +877,8 @@ void ofApp::maskShaderUpdate()
 void ofApp::MotionDraw()
 {
 	//if (diffFloat.bAllocated) {
-	if (IRimage.bAllocated) {
+
+	if (IRimage.bAllocated && IR_mtx.try_lock()) {
 		//Get image dimensions
 		int w = IRimage.width;
 		int h = IRimage.height;
@@ -944,16 +887,17 @@ void ofApp::MotionDraw()
 		//ofSetColor(255, 255, 255);
 
 		//Draw images grayImage,  diffFloat, bufferFloat
-		IRimage.draw(0, 0, 3*w, 3*h);
+		IRimage.draw(0, 0, 3 * w, 3 * h);
 		//diffFloat.draw(0, h, w, h);
 		//bufferFloat.draw(0, 2 * h, w, h);
-		binaryMotion.draw(0, 3*h, 3*w, 3*h);
-		binaryMotion.draw(3*w, 0, 3*w, 3*h);
+		binaryMotion.draw(0, 3 * h, 3 * w, 3 * h);
+		binaryMotion.draw(3 * w, 0, 3 * w, 3 * h);
 		for (int i = 0; i < contourFinder.nBlobs; i++) {
-			contourFinder.blobs[i].draw(3*w, 0);
+			contourFinder.blobs[i].draw(3 * w, 0);
 		}
+		IR_mtx.unlock();
 	}
-	
+
 }
 
 void Process::setup(int stepsnum, string imgfolder, int *toollist) {
@@ -980,236 +924,10 @@ void Process::setup(int stepsnum, string imgfolder, int *toollist) {
 	ProcessImages.push_back(temp);
 }
 
-/*********************************** FOR   IPC  PROCESSING  ********************************/
-void InitIPC(void)
-{
-	HRESULT hr;
-	while (!ipcInitialized) //   IS THERE ANY BETTER SOLUTIONS HERE  ?     easy to be endless loop
-	{
-		hr = InitImagerIPC(0);
-
-		if (FAILED(hr))
-		{
-			ipcInitialized = frameInitialized = false;
-			printf("failed in initImagerIPC\n");
-		}
-		else
-		{
-#ifndef POLLING 
-			SetCallback_OnServerStopped(0, OnServerStopped);
-			SetCallback_OnFrameInit(0, OnFrameInit);
-			SetCallback_OnNewFrameEx(0, OnNewFrame);
-			SetCallback_OnInitCompleted(0, OnInitCompleted);
-#endif
-			hr = RunImagerIPC(0);
-			ipcInitialized = SUCCEEDED(hr);
-		}
-		if (ipcInitialized) { printf("IPC Connect!\n"); }
-		else { printf("if initImagerIPC didn't fail,RunImagerIPC failed\n"); }
-	}
-}
-
-void ReleaseIPC(void)
-{
-	Connected = false;
-	if (ipcInitialized)
-	{
-		ReleaseImagerIPC(0);
-		delete[] pixels;
-		ipcInitialized = false;
-	}
-}
-
-void Idle(void)
-{
-#ifdef POLLING 
-	if (Connected && frameInitialized && (FrameBuffer != NULL))
-	{
-		FrameMetadata Metadata;
-		if (GetFrameQueue(0))
-			if (SUCCEEDED(GetFrame(0, 0, FrameBuffer, FrameSize * FrameDepth, &Metadata)))
-				OnNewFrame(FrameBuffer, &Metadata);
-	}
-#endif
-}
-
-void HandleEvents(void)
-{
-#ifdef POLLING 
-	if (ipcInitialized)
-	{
-		WORD State = GetIPCState(0, true);
-		if (State & IPC_EVENT_SERVER_STOPPED)
-			OnServerStopped(0);
-		if (!Connected && (State & IPC_EVENT_INIT_COMPLETED))
-			OnInitCompleted();
-		if (State & IPC_EVENT_FRAME_INIT)
-		{
-			int frameWidth, frameHeight, frameDepth;
-			if (SUCCEEDED(GetFrameConfig(0, &frameWidth, &frameHeight, &frameDepth)))
-				Init(frameWidth, frameHeight, frameDepth);
-		}
-	}
-#endif
-}
-
-
-
-void Init(int frameWidth, int frameHeight, int frameDepth)
-{
-	FrameWidth = frameWidth;
-	FrameHeight = frameHeight;
-	FrameSize = FrameWidth * FrameHeight;
-	FrameDepth = frameDepth;
-
-	frameInitialized = true;
-#ifdef POLLING 
-	SAFE_DELETE(FrameBuffer);
-	int Size = FrameWidth * FrameHeight * FrameDepth;
-	FrameBuffer = new char[FrameSize * FrameDepth];
-#endif
-}
-
-HRESULT WINAPI OnServerStopped(int reason)
-{
-	ReleaseIPC();
-	return 0;
-}
-
-HRESULT WINAPI OnInitCompleted(void)
-{
-	_stprintf_s(labelConnected, MAXLEN, TEXT("Connected with #%d"), GetSerialNumber(0));
-	InvalidateRect(ghWnd, NULL, FALSE);
-	//	Colors = (TIPCMode(GetIPCMode(1)) == ipcColors);
-	Connected = true;
-	return S_OK;
-}
-
-HRESULT WINAPI OnFrameInit(int frameWidth, int frameHeight, int frameDepth)
-{
-	Init(frameWidth, frameHeight, frameDepth);
-	return 0;
-}
-
-HRESULT WINAPI OnNewFrame(void * pBuffer, FrameMetadata *pMetadata)//pBuffer is the buffer for all the temperature pixels  ; and pMetadate is  the information of the IPC process
-{
-	_stprintf_s(labelFrameCounter, MAXLEN, TEXT("Frame counter HW/SW: %d/%d"), pMetadata->CounterHW, pMetadata->Counter);
-	_stprintf_s(labelPIF, MAXLEN, TEXT("PIF   DI:%d     AI1:%d     AI2:%d"), (pMetadata->PIFin[0] >> 15) == 0, pMetadata->PIFin[0] & 0x3FF, pMetadata->PIFin[1] & 0x3FF);
-
-	_tcscpy_s(labelFlag, MAXLEN, TEXT("Flag: "));
-	switch (pMetadata->FlagState)
-	{
-	case fsFlagOpen: _tcscat_s(labelFlag, MAXLEN, TEXT("open")); break;
-	case fsFlagClose: _tcscat_s(labelFlag, MAXLEN, TEXT("closed")); break;
-	case fsFlagOpening: _tcscat_s(labelFlag, MAXLEN, TEXT("opening")); break;
-	case fsFlagClosing: _tcscat_s(labelFlag, MAXLEN, TEXT("closing")); break;
-	}
-	//	printf("b\n");
-
-
-
-	//unsigned char* pixels = new unsigned char[FrameSize];
-
-	short* buf = (short*)pBuffer;
-	short bmax=0, bmin=0;
-	float bavg = 0;
-	float sigma = 0;
-	short buff;
-
-	for (int i = 0; i < FrameSize; i++) {
-		
-
-		//bavg += (buf[i]-1000);
-		bavg += buf[i];
-		bmax = bmax > buf[i] ? bmax : buf[i];
-		bmin = bmin < buf[i] ? bmin : buf[i];
-	}
-	bavg = bavg / FrameSize;
-	
-	//for (int i = 0; i < FrameSize; i++) {
-	//	sigma += (buf[i] - bavg)*(buf[i] - bavg);
-	//}
-	//sigma = sqrt(sigma / FrameSize);
-	
-	
-	for (int i = 0; i < FrameSize; i++) {
-		//     //***temp=(buf[i]-1000)/10    we want tmin~tmax   now tmin=20 tmax=45.5 so tmin mapped to unsigned char 0 tmax map to unsigned char 255
-		//		pixels[i] = (unsigned char)clip((int)buf[i] - 1200);
-		buff = (short)round(ofMap(buf[i], bavg -30 , bavg + 30, 0, 255, true));
-		pixels[i] = (unsigned char)buff;
-	}
-	//printf("source %d\n", pixels[17680]);
-	//IRimagePrev = IRimage;
-
-	//	IRimage.setFromPixels(pixels, FrameWidth, FrameHeight, OF_IMAGE_GRAYSCALE); // ofImage IRimage
-	IRimage.setFromPixels(pixels, FrameWidth, FrameHeight);                                             // ofxCvGrayscaleImage IRimage
-	
-	if (IRqueue.size() < 10) {
-		IRqueue.push(IRimage);
-		
-	}
-	else
-	{
-		IRqueue.push(IRimage);
-		IRimagePrev = IRqueue.front();
-		IRqueue.pop();
-		//printf("IRqueue size:%d \n", IRqueue.size());
-	}
-	//printf("IRqueue size:%d \n", IRqueue.size());
-
-	newIR = true;
-	return 0;
-
-
-}
-
-void GetBitmap_Limits(short* buf, int FrameSize, short *min, short *max, bool Sigma)
-{
-	int y;
-	double Sum, Mean, Variance;
-	if (!buf) return;
-
-	if (!Sigma)
-	{
-		*min = SHRT_MAX;
-		*max = SHRT_MIN;
-		for (y = 0; y < FrameSize; y++)
-		{
-			*min = MIN(buf[y], *min);
-			*max = MAX(buf[y], *max);
-		}
-		return;
-	}
-
-	Sum = 0;
-	for (y = 0; y < FrameSize; y++)
-		Sum += buf[y];
-	Mean = (double)Sum / FrameSize;
-	Sum = 0;
-	for (y = 0; y < FrameSize; y++)
-		Sum += (Mean - buf[y]) * (Mean - buf[y]);
-	Variance = Sum / FrameSize;
-	Variance = sqrt(Variance);
-	Variance *= 3;  // 3 Sigma
-	*min = short(Mean - Variance);
-	*max = short(Mean + Variance);
-	unsigned short d = *max - *min;
-	if (d < 40)
-	{
-		d >>= 1;
-		*min = *min - d;
-		*max = *max + d;
-	}
-}
-
-BYTE clip(int val)
-{
-	return (val <= 255) ? ((val > 0) ? val : 0) : 255;
-};
 
 void Widgets::setup()
 {
-	font.load("HYQuHeiW 2.ttf", 20);	
+	font.load("HYQuHeiW 2.ttf", 20);
 	finishpercent.loadImage("interface/finishpercent.png");
 	health.loadImage("interface/health.png");
 }
@@ -1225,7 +943,7 @@ void Widgets::update(Process cai, bool finish)
 
 	}
 	else {
-	
+
 		instruction.loadImage("interface/step" + ofToString(cai.currentStep) + ".png");
 		tips.loadImage("interface/tips" + ofToString(cai.currentStep) + ".png");
 	}
@@ -1256,13 +974,13 @@ void Widgets::draw()
 	ofNoFill();
 	ofRect(379, 29, healthBarWidth + 2, 32);
 	ofRect(379, 79, workingBarWidth + 2, 32);
-	ofRect(819, 79, toolparaBarWidth+2, 30+2);
+	ofRect(819, 79, toolparaBarWidth + 2, 30 + 2);
 	ofFill();
 	switch (currentToolStyle) {
 	case knife:
 	{
 		//ofSetColor(255, 255, 255);
-		
+
 		if (toolparaPercent > thres1) {
 			ofSetColor(255, 0, 0);
 			ofRect(820, 80, toolparaBarWidth*toolparaPercent, 30);
@@ -1299,7 +1017,7 @@ void Widgets::draw()
 		ofRect(820, 80, toolparaBarWidth*toolparaPercent, 30);
 		break;
 	}
-	
+
 	}
 }
 
@@ -1454,12 +1172,12 @@ void ofApp::emitParticles() {
 			dusts[dustIndex].emit(mPos);
 			break;
 		case none:
-			
+
 			break;
 		default:
 			break;
-		
-			
+
+
 		}
 
 	}
@@ -1467,7 +1185,7 @@ void ofApp::emitParticles() {
 }
 
 void ofApp::particleEffects() {
-	
+
 	for (unsigned int i = 0; i < dusts.size(); i++) {
 		dusts[i].update(mPos);
 	}
@@ -1484,7 +1202,7 @@ void ofApp::particleEffects() {
 			if (shali.getPosition() > playPos || !shali.isPlaying()) {
 				shali.play();
 			}
-			
+
 		}
 		else if (ToolNow == brush) {
 			if (saotu.getPosition() > playPos || !saotu.isPlaying()) {
