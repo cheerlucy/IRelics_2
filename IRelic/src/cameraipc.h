@@ -5,7 +5,12 @@
 #include "ofxOpenCv.h"
 #include<mutex>
 #include <queue>
-
+extern ofxCvGrayscaleImage IRimage;
+extern ofxCvGrayscaleImage IRimagePrev;
+extern mutex IR_mtx;
+extern short FrameWidth, FrameHeight, FrameDepth;
+extern int FrameSize;
+extern unsigned char* pixelBuffer; //use for blending of the motion detect area
 
 
 

@@ -8,7 +8,7 @@ int deferfps = 0;
 // function prototypes:
 
 //caitao information
-int caitao_toollist[5] = { 1,2,3,1,3 };
+int caitao_toollist[4] = { 1,1,2,3 };
 
 
 
@@ -69,7 +69,7 @@ void ofApp::setup() {
 
 	/*********************game data setup**********************/
 
-	caitao.setup(5, "caitao", caitao_toollist);
+	caitao.setup(4, "caitao", caitao_toollist);
 
 	setForce(20, 14, 28, 24);//Brian!! fill in these 4 parameters. The first one is the maximum force magnitude you may get from the gage sensor on the knife, the second is the safe threshold for the knife and the other two are for the brush.
 
@@ -177,7 +177,7 @@ void ofApp::setup() {
 	//SetImagerIPCCount(1);
 	InitIPC();   //这个里面有 init和run
 	SetIPCMode(0, 1);
-	newIR = false;
+	
 
 	//deferfps = 0;
 	//ofEnableAlphaBlending();
@@ -233,7 +233,7 @@ void ofApp::update() {
 		if (getButtonState(ButtonStart)) {
 
 			//----------------------------------------
-			stage = PROCESS;
+			stage = TUTORIAL;
 			resetGameData();
 			gamelogicsound.load("audio/start.mp3");
 			gamelogicsound.setVolume(0.7);
@@ -241,13 +241,21 @@ void ofApp::update() {
 		}
 		break;
 	}
+	case TUTORIAL: {
+		if (getButtonState(ButtonContinue)) {
+			stage = PROCESS;
+		}
+	}
 	case PROCESS: {
 		if (getButtonState(ButtonRestartpro)) {
 			stage = START;
 		}
+		if (processing_status == starttext) {
 
+			//insert the starttext part here!!
 
-		if (!stepend) {
+		}
+		else if (processing_status == processing) {
 
 			//printf("first time process update\n");
 			if (firsttimehere) { //update the step data
@@ -345,7 +353,7 @@ void ofApp::update() {
 	//printf("Moved = %i \n", Moved);
 	emitP = Moved;
 	if (Moved) {
-		ofPoint temp = GetMotionCenter();
+		//ofPoint temp = GetMotionCenter();
 		mouse = GetMotionCenter();
 		//printf("x = %f y = %f", temp.x, temp.y);
 	}
@@ -398,6 +406,11 @@ void ofApp::draw() {
 		ButtonStart.draw();
 		break;
 	}
+	case TUTORIAL: {
+		tutorialbackground.draw(0, 0, 1280, 800);
+		ButtonContinue.draw();
+		break;
+	}
 	case PROCESS: {
 		// FIRST draw the background image
 		//printf("first time process draw\n");
@@ -407,6 +420,7 @@ void ofApp::draw() {
 		caitaoWidgets.draw();
 		ToolSwitchDraw();
 		ButtonRestartpro.draw();
+		
 		if (ToolNow != caitao.Toollist[caitao.currentStep] && ToolNow != none) {
 			string wrongstr = "Wrong Tool!";
 			appfont.drawString(wrongstr, 1280 / 2 - 50, 415);
@@ -539,6 +553,11 @@ void ofApp::ButtonSetup()
 	ButtonStart.setposition(ofGetWindowWidth() / 2 - ButtonStart.icon.getWidth() / 2, ofGetWindowHeight() - 80 - ButtonStart.icon.getHeight(), ButtonStart.icon.getWidth(), ButtonStart.icon.getHeight());
 	ButtonStart.name = "Start";
 	ButtonStart.toucharea.set((ButtonStart.x + ButtonStart.w / 2 - shiftx) / 6, (ButtonStart.y + ButtonStart.h / 2 - shifty) / 6);
+	
+	ButtonContinue.icon.loadImage("interface/Continue.png");
+	ButtonContinue.setposition(ofGetWindowWidth() / 2 - ButtonContinue.icon.getWidth() / 2, ofGetWindowHeight() - 80 - ButtonContinue.icon.getHeight(), ButtonContinue.icon.getWidth(), ButtonContinue.icon.getHeight());
+	ButtonContinue.name = "Continue";
+	ButtonContinue.toucharea.set((ButtonContinue.x + ButtonContinue.w / 2 - shiftx) / 6, (ButtonContinue.y + ButtonContinue.h / 2 - shifty) / 6);
 
 	ButtonRestartpro.icon.loadImage("interface/restart.png");
 	ButtonRestartpro.setposition(shiftx + 10, shifty + 30, ButtonRestartpro.icon.getWidth() + 30, ButtonRestartpro.icon.getHeight() + 30);
@@ -551,7 +570,10 @@ void ofApp::ButtonSetup()
 	ButtonRestartend.setposition(ofGetWindowWidth() / 2 - ButtonRestartend.icon.getWidth() / 2, 578 - ButtonRestartend.icon.getHeight() / 2, ButtonRestartend.icon.getWidth(), ButtonRestartend.icon.getHeight());
 	ButtonRestartend.name = "Restart";
 	ButtonRestartend.toucharea.set((ButtonRestartend.x + ButtonRestartend.w / 2 - shiftx) / 6, (ButtonRestartend.y + ButtonRestartend.h / 2 - shifty) / 6);
-
+	ButtonRecord.icon.loadImage("interface/record.png");
+	ButtonRecord.setposition(shiftx + 800, shifty + 30, ButtonRecord.icon.getWidth() + 30, ButtonRecord.icon.getHeight() + 30);
+	ButtonRecord.name = "Record";
+	ButtonRecord.toucharea.set((ButtonRecord.x + ButtonRecord.w / 2 - shiftx) / 6, (ButtonRecord.y + ButtonRecord.h / 2 - shifty) / 6);
 }
 	
 	
@@ -737,11 +759,11 @@ void ofApp::IRtoMotion(ofxCvGrayscaleImage IR, ofxCvGrayscaleImage IRprev)
 	newMotion = true;
 	*/
 	//printf("%d  ---  %d\n", IRimage.getPixels()[17680],IRimagePrev.getPixels()[17680]);
-	if (IRimagePrev.bAllocated) {
+	if (IRprev.bAllocated) {
 		//for (int i = 0; i < FrameSize; i++) {
 		//	pixels[i] = (unsigned char)clip((int)(IRimage.getPixels()[i] - IRimagePrev.getPixels()[i]));
 		//}
-		binaryMotion.absDiff(IRimage, IRimagePrev);
+		binaryMotion.absDiff(IR, IRprev);
 		binaryMotion.threshold(Threshold);
 		contourFinder.findContours(binaryMotion, 3, (160 * 120) / 4, 4, false, true);
 		if (contourFinder.nBlobs > 0) {
@@ -909,17 +931,16 @@ void Process::setup(int stepsnum, string imgfolder, int *toollist) {
 	for (int i = 0; i < TotalStepsNum; i++)
 	{
 		imgdirectory = imgfolder + "/" + ofToString(i) + ".jpg";
-		temp.loadImage(imgdirectory);
-		ProcessImages.push_back(temp);
+		if (temp.loadImage(imgdirectory)) ProcessImages.push_back(temp);
 		imgdirectory = imgfolder + "/outline" + ofToString(i) + ".jpg";
-		temp.loadImage(imgdirectory);
-		OutlineImages.push_back(temp);
-		if (i < TotalStepsNum)
-		{
-			Toollist.push_back((ToolStyle)toollist[i]);
-		}
+		if (temp.loadImage(imgdirectory)) OutlineImages.push_back(temp);
+		imgdirectory = imgfolder + "/starttext" + ofToString(i) + ".jpg";
+		if (temp.loadImage(imgdirectory)) starttexts.push_back(temp);
+		imgdirectory = imgfolder + "/midtext" + ofToString(i) + ".jpg"; // now we only have one stage(stage 2, midtext1) that contains midtext
+		if (temp.loadImage(imgdirectory)) midtexts.push_back(temp);
+		Toollist.push_back((ToolStyle)toollist[i]);
 	}
-	imgdirectory = imgfolder + "/" + ofToString(5) + ".jpg";
+	imgdirectory = imgfolder + "/" + ofToString(TotalStepsNum) + ".jpg";
 	temp.loadImage(imgdirectory);
 	ProcessImages.push_back(temp);
 }
@@ -935,7 +956,7 @@ void Widgets::setup()
 void Widgets::update(Process cai, bool finish)
 {
 
-	toolpara.loadImage("interface/toolpara" + ofToString(cai.currentStep) + ".png");
+	//toolpara.loadImage("interface/toolpara" + ofToString(cai.currentStep) + ".png");
 	currentToolStyle = cai.Toollist[cai.currentStep];
 	if (finish) {
 		instruction.loadImage("interface/stepend" + ofToString(cai.currentStep) + ".png");
@@ -954,16 +975,16 @@ void Widgets::draw()
 	instruction.draw(50, 720);
 	tips.draw(900, 720);
 	finishpercent.draw(260, 80);
-	health.draw(260, 30);
-	toolpara.draw(715, 80);
+	//health.draw(260, 30);
+	//toolpara.draw(715, 80);
 	//drawing the health bar
-	ofSetColor(255 * (1 - healthPercent), 255 * healthPercent, 30);
-	ofRect(380, 30, healthBarWidth*healthPercent, 30);
-	ofSetColor(255, 255, 255);
+	//ofSetColor(255 * (1 - healthPercent), 255 * healthPercent, 30);
+	//ofRect(380, 30, healthBarWidth*healthPercent, 30);
+	//ofSetColor(255, 255, 255);
 	string str;
-	str = ofToString((int)round(healthPercent * 100));
-	str += "%";
-	font.drawString(str, 380 + healthBarWidth + 5, 55);
+	//str = ofToString((int)round(healthPercent * 100));
+	//str += "%";
+	//font.drawString(str, 380 + healthBarWidth + 5, 55);
 	//draw the working bar
 	ofSetColor(134, 216, 63);
 	ofRect(380, 80, workingBarWidth*workingPercent, 30);
@@ -972,10 +993,11 @@ void Widgets::draw()
 	str += "%";
 	font.drawString(str, 380 + workingBarWidth + 5, 105);
 	ofNoFill();
-	ofRect(379, 29, healthBarWidth + 2, 32);
+	//ofRect(379, 29, healthBarWidth + 2, 32);
 	ofRect(379, 79, workingBarWidth + 2, 32);
-	ofRect(819, 79, toolparaBarWidth + 2, 30 + 2);
+	//ofRect(819, 79, toolparaBarWidth + 2, 30 + 2);
 	ofFill();
+	/*
 	switch (currentToolStyle) {
 	case knife:
 	{
@@ -1019,6 +1041,8 @@ void Widgets::draw()
 	}
 
 	}
+	*/
+
 }
 
 

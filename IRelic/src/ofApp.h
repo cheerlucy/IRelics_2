@@ -21,8 +21,9 @@
 #include "cameraipc.h"
 
 enum ToolStyle { none = 0, knife, brush, dropper };
-enum GameStage { START = 0, PROCESS, END, GAMEOVER };
+enum GameStage { START = 0, TUTORIAL, PROCESS, END };
 enum RelicType { CAITAO = 0, HUASHI };
+enum ProcessStatus { starttext=0,processing,end};
 
 struct RelicPackage {//for each relic package's files management
 	string imageFolder;
@@ -66,6 +67,8 @@ public:
 	//ofImage temp;
 	vector<ofImage> ProcessImages;
 	vector<ofImage> OutlineImages;
+	vector<ofImage> starttexts;
+	vector<ofImage> midtexts;
 	vector<ToolStyle> Toollist;
 
 	void setup(int stepsnum, string imgfolder, int * toollist);
@@ -139,7 +142,7 @@ class ofApp : public ofBaseApp{
 		
 		//string str;
 		ToolStyle ToolNow;
-
+		ProcessStatus processing_status;
 		int IRimage_w = 160;
 		int IRimage_h = 120;
 
@@ -163,7 +166,7 @@ class ofApp : public ofBaseApp{
 		ofxIntSlider outlineth;
 		ofxIntSlider IRthreshold;
 		//ofxIntSlider IRfanwei;
-
+		
 		/****************************       For mask shader         *******************/
 		ofShader shaderMask;
 		ofShader shaderMotion;
@@ -213,7 +216,8 @@ class ofApp : public ofBaseApp{
 
 		//START
 		ofImage startbackground;
-
+		//TUTORIAL
+		ofImage tutorialbackground;
 		//PROCESS
 		Widgets caitaoWidgets;
 
@@ -227,9 +231,9 @@ class ofApp : public ofBaseApp{
 		void resetGameData();
 		const float healthTotal = 5000;
 		float healthLeft=5000;
-		int workingTotal[5] = { 4151,4151,1449,1449,4151 };
+		int workingTotal[4] = { 4151,4151,1449,4151 };
 		int workingLeft;
-
+	
 
 		float forceTotal1= 30;
 		float forceTotal2 = 100;
@@ -254,10 +258,11 @@ class ofApp : public ofBaseApp{
 		//button ButtonCaitao;
 		//button ButtonHuashi;
 		button ButtonStart;
-		//button ButtonPause;
+		button ButtonContinue;
+		button ButtonRecord;
 		button ButtonRestartpro;
 		button ButtonRestartend;
-		button ButtonRestartgameover;
+		//button ButtonRestartgameover;
 		//button ButtonHelp;
 		//void getSwitchStage();
 		void ButtonSetup();

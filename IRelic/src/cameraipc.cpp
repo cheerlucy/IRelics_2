@@ -8,7 +8,7 @@
 HINSTANCE hInst;
 HWND ghWnd = NULL;
 const TCHAR szWindowClass[] = TEXT("StartIPCWin32");
-extern TCHAR labelConnected[MAXLEN];
+TCHAR labelConnected[MAXLEN];
 TCHAR labelFrameCounter[MAXLEN];
 TCHAR labelPIF[MAXLEN];
 TCHAR labelFlag[MAXLEN];
@@ -16,18 +16,20 @@ TCHAR labelTarget[MAXLEN];
 queue<ofxCvGrayscaleImage> IRqueue;
 ofxCvGrayscaleImage IRimage;
 ofxCvGrayscaleImage IRimagePrev;
+mutex IR_mtx;
+short FrameWidth=160, FrameHeight=120, FrameDepth=2;
+int FrameSize = 19200;
+unsigned char* pixelBuffer=new unsigned char[FrameSize]; //use for blending of the motion detect area
 
 bool ipcInitialized = false;
 bool frameInitialized = false;
 bool Connected = false;
 bool Colors = false;
 bool Painted = false;
-short FrameWidth = 160, FrameHeight = 120, FrameDepth = 2;
-int FrameSize = 19200;
-bool newIR;
-mutex IR_mtx;
+
+
 unsigned char* pixels = new unsigned char[FrameSize];
-unsigned char* pixelBuffer = new unsigned char[FrameSize]; //use for blending of the motion detect area
+
 														   //ofPixels pixelBuffer;
 
 /*********************************** FOR   IPC  PROCESSING  ********************************/
@@ -205,7 +207,7 @@ HRESULT WINAPI OnNewFrame(void * pBuffer, FrameMetadata *pMetadata)//pBuffer is 
 		IRqueue.pop();
 		//printf("IRqueue size:%d \n", IRqueue.size());
 	}
-	newIR = true;
+	
 	IR_mtx.unlock();
 	//printf("IRqueue size:%d \n", IRqueue.size());
 
