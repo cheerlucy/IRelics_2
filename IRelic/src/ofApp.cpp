@@ -230,8 +230,8 @@ void ofApp::update() {
 	case START: {
 
 		//getSwitchStage();
-		if (getButtonState(ButtonStart)) {
-
+		if (Moved) {
+			//if (getButtonState(ButtonStart)) {
 			//----------------------------------------
 			stage = TUTORIAL;
 			resetGameData();
@@ -242,33 +242,34 @@ void ofApp::update() {
 		break;
 	}
 	case TUTORIAL: {
-		if (getButtonState(ButtonContinue)) {
+		if (Moved) {
+		/*if (getButtonState(ButtonContinue)) {*/
 			stage = PROCESS;
 		}
+	}
+	case STARTTEXT: {
+		if (firsttimehere) { //update the step data
+			workingLeft = workingTotal[caitao.currentStep];
+			caitaoWidgets.update(caitao, stage);
+			backgroundImage = caitao.ProcessImages[caitao.currentStep + 1];
+			foregroundImage = caitao.ProcessImages[caitao.currentStep];
+			starttextstarttime = ofGetElapsedTimeMillis();
+			for (int i = 0; i < FrameSize; i++) { pixelBuffer[i] = 0; }//clean the pixel Buffer for recording a new step motion
+			firsttimehere = false;
+		}
+		starttexttimer = ofGetElapsedTimeMillis();
+		if (starttexttimer - starttextstarttime > starttextLimit) {
+			stage = PROCESS;
+		}
+		break;
 	}
 	case PROCESS: {
 		if (getButtonState(ButtonRestartpro)) {
 			stage = START;
 		}
-		if (processing_status == starttext) {
-
-			//insert the starttext part here!!
-
+		if (getButtonState(ButtonRecord)) {
+			screenshot.grabScreen(0, 0, ofGetWidth(), ofGetHeight());
 		}
-		else if (processing_status == processing) {
-
-			//printf("first time process update\n");
-			if (firsttimehere) { //update the step data
-				workingLeft = workingTotal[caitao.currentStep];
-				caitaoWidgets.update(caitao, stepend);
-				backgroundImage = caitao.ProcessImages[caitao.currentStep + 1];
-				foregroundImage = caitao.ProcessImages[caitao.currentStep];
-
-				for (int i = 0; i < FrameSize; i++) { pixelBuffer[i] = 0; }//clean the pixel Buffer for recording a new step motion
-				firsttimehere = false;
-			}
-
-
 
 
 			ToolSwitchUpdate();//Brian part
@@ -276,23 +277,33 @@ void ofApp::update() {
 			ToolNow = caitao.Toollist[caitao.currentStep];
 			if (ToolNow == caitao.Toollist[caitao.currentStep]) { //If user is not using the right tool,then nothing updates.
 				maskShaderUpdate();//workingleft is calculated here.
+				if (tempbegin) {
+					errTooltime+= ofGetElapsedTimef() - tempbegin;
+					tempbegin = 0;
+				}
 			}
 			else {
 				currentForce = 0;
 				if(ToolNow!= none)
-					errTooltime++; 
+					tempbegin= ofGetElapsedTimef();
+				else {
+					if (tempbegin) {
+						errTooltime += ofGetElapsedTimef() - tempbegin;
+						tempbegin = 0;
+					}
+				}
 			}
 
 			if (caitao.Toollist[caitao.currentStep] == knife) {
 				
-				caitaoWidgets.toolparaPercent = ofMap(currentForce, 0.0, forceTotal1, 0.0, 1.0, true);
+				//caitaoWidgets.toolparaPercent = ofMap(currentForce, 0.0, forceTotal1, 0.0, 1.0, true);
 				if (Moved && currentForce > safeThres1) {
 					healthLeft = healthLeft - 5; 
 				}//如果力大于thres1 用刀 并且 motion有数
 			}
 			else if (caitao.Toollist[caitao.currentStep] == brush) {
 				
-				caitaoWidgets.toolparaPercent = ofMap(currentForce, 0.0, forceTotal2, 0.0, 1.0, true);
+				//caitaoWidgets.toolparaPercent = ofMap(currentForce, 0.0, forceTotal2, 0.0, 1.0, true);
 				if (Moved  && currentForce > safeThres2) {
 					healthLeft = healthLeft - 5;
 				}//如果力大于thres2 用刷 并且 motion有数
@@ -308,47 +319,25 @@ void ofApp::update() {
 
 		//screenshot.grabScreen(0, 0, ofGetWidth(), ofGetHeight());
 		if (caitaoWidgets.workingPercent < 0.1 && caitao.Toollist[caitao.currentStep] == knife) {
-			stepend = true;
+			stage = STEPEND;
 			firsttimeend = true;
 			//printf("%f\n", caitaoWidgets.workingPercent);
 		}
 		else if (caitaoWidgets.workingPercent < 0.05 && caitao.Toollist[caitao.currentStep] == brush) {
-			stepend = true;
+			stage = STEPEND;
 			firsttimeend = true;
 		}
 		else if (caitaoWidgets.workingPercent < 0.01 && caitao.Toollist[caitao.currentStep] == dropper) {
-			stepend = true;
+			stage = STEPEND;
 			firsttimeend = true;
 		}
 
 
-	}
-	else {
 
 
-		if (firsttimeend) {
-			gamelogicsound.load("audio/stepend.mp3");
-			gamelogicsound.setVolume(0.7);
-			gamelogicsound.play();
-			caitaoWidgets.update(caitao, stepend);
-			changingstarttime = ofGetElapsedTimeMillis();
-			firsttimeend = false;
-			//printf("tukuaiend!\n");
-		}
-		changingtimer = ofGetElapsedTimeMillis();
-		if (changingtimer - changingstarttime > changingtimeLimit) {
-			caitao.currentStep++;
-			firsttimehere = true;
-			stepend = false;
-			if (caitao.currentStep > 4) {
-				gamelogicsound.load("audio/success.mp3");
-				gamelogicsound.setVolume(0.7);
-				gamelogicsound.play();
-				stage = END;
-			}
-		}
+	
 
-	}
+
 
 	//printf("Moved = %i \n", Moved);
 	emitP = Moved;
@@ -359,6 +348,30 @@ void ofApp::update() {
 	}
 
 	break;
+	}
+	case STEPEND: {
+		if (firsttimeend) {
+			gamelogicsound.load("audio/STEPEND.mp3");
+			gamelogicsound.setVolume(0.7);
+			gamelogicsound.play();
+			caitaoWidgets.update(caitao, stage);
+			stependstarttime = ofGetElapsedTimeMillis();
+			firsttimeend = false;
+			//printf("tukuaiend!\n");
+		}
+		stependtimer = ofGetElapsedTimeMillis();
+		if (stependtimer - stependstarttime > stependLimit) {
+			caitao.currentStep++;
+			firsttimehere = true;
+			stage = STARTTEXT;
+			if (caitao.currentStep > 3) {
+				gamelogicsound.load("audio/success.mp3");
+				gamelogicsound.setVolume(0.7);
+				gamelogicsound.play();
+				stage = END;
+			}
+		}
+		break;
 	}
 	case END: {
 
@@ -421,11 +434,11 @@ void ofApp::draw() {
 		ToolSwitchDraw();
 		ButtonRestartpro.draw();
 		
-		if (ToolNow != caitao.Toollist[caitao.currentStep] && ToolNow != none) {
+	/*	if (ToolNow != caitao.Toollist[caitao.currentStep] && ToolNow != none) {
 			string wrongstr = "Wrong Tool!";
 			appfont.drawString(wrongstr, 1280 / 2 - 50, 415);
 		}
-
+*/
 		break;
 	}
 	case END: {
@@ -433,11 +446,10 @@ void ofApp::draw() {
 		endbackground.draw(0, 0, 1280, 800);
 		ButtonRestartend.draw();
 
-		string scorestr;
+	/*	string scorestr;
 		scorestr = ofToString((int)round(caitaoWidgets.healthPercent * 100));
-		scorestr += "%";
-		//appfont.setSpaceSize(100);
-		appfont.drawString(scorestr, 1280 / 2 - 30, 200);
+		scorestr += "%";*/
+		//appfont.drawString(scorestr, 1280 / 2 - 30, 200);
 
 		break;
 	}
@@ -626,12 +638,15 @@ void ofApp::ToolSwitchSetup()
 {
 	Knife.icon_off.loadImage("interface/chan_off.png");
 	Knife.icon_on.loadImage("interface/chan_on.png");
+	Knife.icon_err.loadImage("interface/chan_err.png");
 	Knife.ID = knife;
 	Brush.icon_off.loadImage("interface/brush_off.png");
 	Brush.icon_on.loadImage("interface/brush_on.png");
+	Brush.icon_err.loadImage("interface/brush_err.png");
 	Brush.ID = brush;
 	Dropper.icon_off.loadImage("interface/dropper_off.png");
 	Dropper.icon_on.loadImage("interface/dropper_on.png");
+	Dropper.icon_err.loadImage("interface/dropper_err.png");
 	Dropper.ID = dropper;
 	TSPosition.set(1180, 268);
 
@@ -705,21 +720,31 @@ void ofApp::ToolSwitchDraw()
 		break;
 	}
 	case knife: {
-		Knife.icon_on.draw(TSPosition);
+		if (ToolNow != caitao.Toollist[caitao.currentStep])  
+			Knife.icon_err.draw(TSPosition);
+		else 
+			Knife.icon_on.draw(TSPosition);
 		Brush.icon_off.draw(TSPosition.x, TSPosition.y + Knife.icon_off.getHeight());
 		Dropper.icon_off.draw(TSPosition.x, TSPosition.y + Knife.icon_off.getHeight() * 2);
 		break;
 	}
 	case brush: {
 		Knife.icon_off.draw(TSPosition);
-		Brush.icon_on.draw(TSPosition.x, TSPosition.y + Knife.icon_off.getHeight());
+		if (ToolNow != caitao.Toollist[caitao.currentStep])
+			Brush.icon_err.draw(TSPosition.x, TSPosition.y + Knife.icon_off.getHeight());
+		else
+			Brush.icon_on.draw(TSPosition.x, TSPosition.y + Knife.icon_off.getHeight());
+		
 		Dropper.icon_off.draw(TSPosition.x, TSPosition.y + Knife.icon_off.getHeight() * 2);
 		break;
 	}
 	case dropper: {
 		Knife.icon_off.draw(TSPosition);
 		Brush.icon_off.draw(TSPosition.x, TSPosition.y + Knife.icon_off.getHeight());
-		Dropper.icon_on.draw(TSPosition.x, TSPosition.y + Knife.icon_off.getHeight() * 2);
+		if (ToolNow != caitao.Toollist[caitao.currentStep])
+			Dropper.icon_on.draw(TSPosition.x, TSPosition.y + Knife.icon_off.getHeight() * 2);
+		else
+			Dropper.icon_err.draw(TSPosition.x, TSPosition.y + Knife.icon_off.getHeight() * 2);
 		break;
 	}
 	}
@@ -727,7 +752,7 @@ void ofApp::ToolSwitchDraw()
 
 void ofApp::resetGameData()
 {
-	stepend = false;
+	processing_status = STARTTEXT;
 	firsttimehere = true;
 	firsttimeend = false;
 	caitao.currentStep = 0;
@@ -934,10 +959,10 @@ void Process::setup(int stepsnum, string imgfolder, int *toollist) {
 		if (temp.loadImage(imgdirectory)) ProcessImages.push_back(temp);
 		imgdirectory = imgfolder + "/outline" + ofToString(i) + ".jpg";
 		if (temp.loadImage(imgdirectory)) OutlineImages.push_back(temp);
-		imgdirectory = imgfolder + "/starttext" + ofToString(i) + ".jpg";
-		if (temp.loadImage(imgdirectory)) starttexts.push_back(temp);
-		imgdirectory = imgfolder + "/midtext" + ofToString(i) + ".jpg"; // now we only have one stage(stage 2, midtext1) that contains midtext
-		if (temp.loadImage(imgdirectory)) midtexts.push_back(temp);
+		//imgdirectory = imgfolder + "/STARTTEXT" + ofToString(i) + ".jpg";
+		//if (temp.loadImage(imgdirectory)) STARTTEXTs.push_back(temp);
+		//imgdirectory = imgfolder + "/midtext" + ofToString(i) + ".jpg"; // now we only have one stage(stage 2, midtext1) that contains midtext
+		//if (temp.loadImage(imgdirectory)) midtexts.push_back(temp);
 		Toollist.push_back((ToolStyle)toollist[i]);
 	}
 	imgdirectory = imgfolder + "/" + ofToString(TotalStepsNum) + ".jpg";
@@ -950,99 +975,139 @@ void Widgets::setup()
 {
 	font.load("HYQuHeiW 2.ttf", 20);
 	finishpercent.loadImage("interface/finishpercent.png");
-	health.loadImage("interface/health.png");
+	//health.loadImage("interface/health.png");
 }
 
-void Widgets::update(Process cai, bool finish)
+void Widgets::update(Process cai, GameStage status)
 {
 
 	//toolpara.loadImage("interface/toolpara" + ofToString(cai.currentStep) + ".png");
 	currentToolStyle = cai.Toollist[cai.currentStep];
-	if (finish) {
-		instruction.loadImage("interface/stepend" + ofToString(cai.currentStep) + ".png");
-		tips.loadImage("interface/tipsend" + ofToString(cai.currentStep) + ".png");
 
-	}
-	else {
 
+	switch (status) {
+	case START:
+		break;
+	case TUTORIAL:
+		break;
+	case STARTTEXT: {
 		instruction.loadImage("interface/step" + ofToString(cai.currentStep) + ".png");
 		tips.loadImage("interface/tips" + ofToString(cai.currentStep) + ".png");
+		teachingtext.loadImage("interface/starttext" + ofToString(cai.currentStep) + ".png");
+		break;
 	}
+	case PROCESS: {
+		if (teachingtext.loadImage("interface/midtext" + ofToString(cai.currentStep) + ".png"))
+			bMidtext = true; //if there is a midtext being loaded, then draw it.
+		else
+			bMidtext = false;
+		break;
+	}
+	case STEPEND: {
+		instruction.loadImage("interface/stepend" + ofToString(cai.currentStep) + ".png");
+		tips.loadImage("interface/tipsend" + ofToString(cai.currentStep) + ".png");
+		break;
+	}
+	case END: {
+		break;
+	}
+	default:
+		printf("ERR STEP UPDATE\n");
+		break;
+	}
+
 }
 
-void Widgets::draw()
+void Widgets::draw(GameStage status)
 {
-	instruction.draw(50, 720);
-	tips.draw(900, 720);
-	finishpercent.draw(260, 80);
-	//health.draw(260, 30);
-	//toolpara.draw(715, 80);
-	//drawing the health bar
-	//ofSetColor(255 * (1 - healthPercent), 255 * healthPercent, 30);
-	//ofRect(380, 30, healthBarWidth*healthPercent, 30);
-	//ofSetColor(255, 255, 255);
-	string str;
-	//str = ofToString((int)round(healthPercent * 100));
-	//str += "%";
-	//font.drawString(str, 380 + healthBarWidth + 5, 55);
-	//draw the working bar
-	ofSetColor(134, 216, 63);
-	ofRect(380, 80, workingBarWidth*workingPercent, 30);
-	ofSetColor(255, 255, 255);
-	str = ofToString((int)round(workingPercent * 100));
-	str += "%";
-	font.drawString(str, 380 + workingBarWidth + 5, 105);
-	ofNoFill();
-	//ofRect(379, 29, healthBarWidth + 2, 32);
-	ofRect(379, 79, workingBarWidth + 2, 32);
-	//ofRect(819, 79, toolparaBarWidth + 2, 30 + 2);
-	ofFill();
-	/*
-	switch (currentToolStyle) {
-	case knife:
-	{
-		//ofSetColor(255, 255, 255);
+	switch (status) {
+	case START:
+		break;
+	case TUTORIAL:
+		break;
+	case STARTTEXT: {
+		teachingtext.draw(225, 220);
 
-		if (toolparaPercent > thres1) {
-			ofSetColor(255, 0, 0);
-			ofRect(820, 80, toolparaBarWidth*toolparaPercent, 30);
-			font.drawString("X", 820 + toolparaBarWidth + 5, 105);
-		}
-		else {
-			ofSetColor(134, 216, 63);
-			ofRect(820, 80, toolparaBarWidth*toolparaPercent, 30);
-			ofSetColor(255, 255, 255);
-			font.drawString("O", 820 + toolparaBarWidth + 5, 105);
-		}
-		ofLine(ofPoint(820 + toolparaBarWidth*thres1, 80), ofPoint(820 + toolparaBarWidth*thres1, 80 + 30));
-		break;
-	}
-	case brush:
-	{
-		if (toolparaPercent > thres2) {
-			ofSetColor(255, 0, 0);
-			ofRect(820, 80, toolparaBarWidth*toolparaPercent, 30);
-			font.drawString("X", 820 + toolparaBarWidth + 5, 105);
-		}
-		else {
-			ofSetColor(134, 216, 63);
-			ofRect(820, 80, toolparaBarWidth*toolparaPercent, 30);
-			ofSetColor(255, 255, 255);
-			font.drawString("O", 820 + toolparaBarWidth + 5, 105);
-		}
-		ofLine(ofPoint(820 + toolparaBarWidth*thres2, 80), ofPoint(820 + toolparaBarWidth*thres2, 80 + 30));
-		break;
-	}
-	case dropper:
-	{
+		instruction.draw(50, 720);
+		tips.draw(900, 720);
+		finishpercent.draw(260, 80);
+		string str;
+		//draw the working bar
 		ofSetColor(134, 216, 63);
-		ofRect(820, 80, toolparaBarWidth*toolparaPercent, 30);
+		ofRect(380, 30, workingBarWidth*workingPercent, 30);
+		ofSetColor(255, 255, 255);
+		str = ofToString((int)round(workingPercent * 100));
+		str += "%";
+		font.drawString(str, 380 + workingBarWidth + 5, 105);
+		ofNoFill();
+		ofRect(379, 29, workingBarWidth + 2, 32);
+
+		break;
+	}
+	case PROCESS: {
+		if (bMidtext) {
+			teachingtext.draw(225, 220);
+		}
+		instruction.draw(50, 720);
+		tips.draw(900, 720);
+		finishpercent.draw(260, 80);
+		string str;
+		//draw the working bar
+		ofSetColor(134, 216, 63);
+		ofRect(380, 30, workingBarWidth*workingPercent, 30);
+		ofSetColor(255, 255, 255);
+		str = ofToString((int)round(workingPercent * 100));
+		str += "%";
+		font.drawString(str, 380 + workingBarWidth + 5, 105);
+		ofNoFill();
+		ofRect(379, 29, workingBarWidth + 2, 32);
+		ofFill();
+
+		break;
+	}
+	case STEPEND: {
+		instruction.draw(50, 720);
+		tips.draw(900, 720);
+		finishpercent.draw(260, 80);
+		string str;
+		//draw the working bar
+		ofSetColor(134, 216, 63);
+		ofRect(380, 30, workingBarWidth*workingPercent, workingBarHeight);
+		ofSetColor(255, 255, 255);
+		str = ofToString((int)round(workingPercent * 100));
+		str += "%";
+		font.drawString(str, 380 + workingBarWidth + 5, 105);
+		ofNoFill();
+		ofRect(379, 29, workingBarWidth + 2, workingBarHeight+2);
+		ofFill();
+		break;
+	}
+	case END: {
+		review[0].draw(334,615);
+		review[1].draw(413, 615);
+		review[2].draw(491, 615);
+		
+		ofSetColor(180, 180, 180);
+		ofRect(352, 387, scoreBarWidth*recordPercent, scoreBarHeight);
+		ofRect(431, 387, scoreBarWidth*healthPercent, scoreBarHeight);
+		ofRect(507, 387, scoreBarWidth*manipPercent, scoreBarHeight);
+		ofSetColor(255, 255, 255);
+		ofNoFill();
+		ofRect(351, 386, scoreBarWidth + 2, scoreBarHeight + 2);
+		ofRect(430, 386, scoreBarWidth + 2, scoreBarHeight + 2);
+		ofRect(506, 386, scoreBarWidth + 2, scoreBarHeight + 2);
+		ofFill();
+
+
+		break;
+	}
+	default:
+		printf("ERR DRAW STEP\n");
 		break;
 	}
 
-	}
-	*/
-
+					
+	
 }
 
 

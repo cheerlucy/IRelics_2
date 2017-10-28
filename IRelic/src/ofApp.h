@@ -21,9 +21,9 @@
 #include "cameraipc.h"
 
 enum ToolStyle { none = 0, knife, brush, dropper };
-enum GameStage { START = 0, TUTORIAL, PROCESS, END };
+enum GameStage { START = 0, TUTORIAL, STARTTEXT, PROCESS, STEPEND, END };
 enum RelicType { CAITAO = 0, HUASHI };
-enum ProcessStatus { starttext=0,processing,end};
+
 
 struct RelicPackage {//for each relic package's files management
 	string imageFolder;
@@ -41,6 +41,7 @@ public:
 	ToolStyle ID;
 	ofImage icon_on;
 	ofImage icon_off;
+	ofImage icon_err;
 	Tool() { ID = none; }
 	void setToolStyle(int num) { ID = (ToolStyle)num; }
 };
@@ -67,8 +68,6 @@ public:
 	//ofImage temp;
 	vector<ofImage> ProcessImages;
 	vector<ofImage> OutlineImages;
-	vector<ofImage> starttexts;
-	vector<ofImage> midtexts;
 	vector<ToolStyle> Toollist;
 
 	void setup(int stepsnum, string imgfolder, int * toollist);
@@ -79,28 +78,43 @@ public:
 	ofImage instruction;
 	ofImage tips;
 	ofImage finishpercent;
-	ofImage health;
-	ofImage toolpara;
+	ofImage teachingtext;
+	ofImage review[3];//0 for record; 1 for  profession ; 2 for manipulation
+
+	//ofImage health;
+	//ofImage toolpara;
 	ofTrueTypeFont  font;
 	float thres1;//for knife
 	float thres2;//for brush
 	float workingPercent = 1.0;//working left percent
 	float healthPercent = 1.0;
-	float toolparaPercent = 0.0;
-	 int healthBarWidth = 700;
-	 int workingBarWidth = 260;
-	 int toolparaBarWidth = 260;
+	float recordPercent = 1.0;
+	float manipPercent = 1.0;
+	bool  bMidtext = false;  //when need to draw mid-process text, make it true
+
+	//float toolparaPercent = 0.0;
+	// int healthBarWidth = 700;
+	 int workingBarWidth = 500;
+	 int workingBarHeight = 30;
+	 int scoreBarWidth = 100;
+	 int scoreBarHeight = 30;
+	// int toolparaBarWidth = 260;
 	ToolStyle currentToolStyle;
 	void setup();
 	void reset() {
 		 workingPercent = 1.0;//working left percent
 		 healthPercent = 1.0;
-		 toolparaPercent = 0.0;
+		 //toolparaPercent = 0.0;
 
 	}
-	void update(Process cai, bool finish);
+	void setscore(float a, float b, float c) {
+		recordPercent = a;
+		healthPercent = b;
+		manipPercent = c;
+	}
+	void update(Process cai, GameStage status);
 	void setThres(float x, float y) { thres1 = x; thres2 = y; }
-	void draw();
+	void draw(GameStage status);
 };
 
 
@@ -142,7 +156,6 @@ class ofApp : public ofBaseApp{
 		
 		//string str;
 		ToolStyle ToolNow;
-		ProcessStatus processing_status;
 		int IRimage_w = 160;
 		int IRimage_h = 120;
 
@@ -198,7 +211,7 @@ class ofApp : public ofBaseApp{
 		void ToolSwitchDraw();
 
 		/***************************************   Game Logic   ********************************************/
-		bool stepend=false;
+		
 		bool firsttimehere=true;
 		bool firsttimeend=false;
 		//int GameStage;
@@ -248,11 +261,16 @@ class ofApp : public ofBaseApp{
 		}
 		float timeLimit = 120.0; //120 seconds
 		float errTooltime=0;
-		float errcounter=0;
-		float changingtimeLimit = 4000;//2seconds 2000millisecs
-		float changingstarttime=0;
-		float changingtimer=0;
+		float tempbegin=0;
+
+		float stependLimit = 4000;//2seconds 2000millisecs
+		float stependstarttime =0;
+		float stependtimer =0;
 		
+		float starttextLimit = 6000;//2seconds 2000millisecs
+		float starttextstarttime = 0;
+		float starttexttimer = 0;
+
 		/****************************************    Button    ********************************************/
 
 		//button ButtonCaitao;
