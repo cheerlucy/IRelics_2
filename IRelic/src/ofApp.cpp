@@ -177,7 +177,7 @@ void ofApp::setup() {
 	//SetImagerIPCCount(1);
 	InitIPC();   //这个里面有 init和run
 	SetIPCMode(0, 1);
-	
+
 
 	//deferfps = 0;
 	//ofEnableAlphaBlending();
@@ -242,10 +242,19 @@ void ofApp::update() {
 		break;
 	}
 	case TUTORIAL: {
-		if (Moved) {
-		/*if (getButtonState(ButtonContinue)) {*/
-			stage = PROCESS;
+		if (firsttimehere) {
+			tutostarttime = ofGetElapsedTimeMillis();
+			firsttimehere = false;
 		}
+		else {
+			tutotimer = ofGetElapsedTimeMillis();
+			if ((Moved&&(tutotimer-tutostarttime)>3000)||(tutotimer-tutostarttime)>tutoLimit) {
+				/*if (getButtonState(ButtonContinue)) {*/
+				stage = STARTTEXT;
+				firsttimehere = true;
+			}
+		}
+		break;
 	}
 	case STARTTEXT: {
 		if (firsttimehere) { //update the step data
@@ -269,51 +278,59 @@ void ofApp::update() {
 		}
 		if (getButtonState(ButtonRecord)) {
 			screenshot.grabScreen(0, 0, ofGetWidth(), ofGetHeight());
+			recordtimes++;
+			bRecording = true;
+			recordstarttime = ofGetElapsedTimeMillis();
+		}
+		if (bRecording) {
+			recordtimer = ofGetElapsedTimeMillis();
+			if (recordtimer - recordstarttime > recordLimit||(Moved&&recordtimer - recordstarttime > 200)) {
+				bRecording = false;
+			}
 		}
 
+		ToolSwitchUpdate();//Brian part
 
-			ToolSwitchUpdate();//Brian part
-
-			ToolNow = caitao.Toollist[caitao.currentStep];
-			if (ToolNow == caitao.Toollist[caitao.currentStep]) { //If user is not using the right tool,then nothing updates.
-				maskShaderUpdate();//workingleft is calculated here.
+		ToolNow = caitao.Toollist[caitao.currentStep];
+		if (ToolNow == caitao.Toollist[caitao.currentStep]) { //If user is not using the right tool,then nothing updates.
+			maskShaderUpdate();//workingleft is calculated here.
+			if (tempbegin) {
+				errTooltime += ofGetElapsedTimef() - tempbegin;
+				tempbegin = 0;
+			}
+		}
+		else {
+			currentForce = 0;
+			if (ToolNow != none)
+				tempbegin = ofGetElapsedTimef();
+			else {
 				if (tempbegin) {
-					errTooltime+= ofGetElapsedTimef() - tempbegin;
+					errTooltime += ofGetElapsedTimef() - tempbegin;
 					tempbegin = 0;
 				}
 			}
-			else {
-				currentForce = 0;
-				if(ToolNow!= none)
-					tempbegin= ofGetElapsedTimef();
-				else {
-					if (tempbegin) {
-						errTooltime += ofGetElapsedTimef() - tempbegin;
-						tempbegin = 0;
-					}
-				}
-			}
+		}
 
-			if (caitao.Toollist[caitao.currentStep] == knife) {
-				
-				//caitaoWidgets.toolparaPercent = ofMap(currentForce, 0.0, forceTotal1, 0.0, 1.0, true);
-				if (Moved && currentForce > safeThres1) {
-					healthLeft = healthLeft - 5; 
-				}//如果力大于thres1 用刀 并且 motion有数
-			}
-			else if (caitao.Toollist[caitao.currentStep] == brush) {
-				
-				//caitaoWidgets.toolparaPercent = ofMap(currentForce, 0.0, forceTotal2, 0.0, 1.0, true);
-				if (Moved  && currentForce > safeThres2) {
-					healthLeft = healthLeft - 5;
-				}//如果力大于thres2 用刷 并且 motion有数
-			}
-			else {
-				//if the tool is dropper , no health deduction wil be done.
-			}
-			
+		if (caitao.Toollist[caitao.currentStep] == knife) {
 
-		caitaoWidgets.healthPercent = ofMap(healthLeft, 0.0, healthTotal, 0.0, 1.0, true);
+			//caitaoWidgets.toolparaPercent = ofMap(currentForce, 0.0, forceTotal1, 0.0, 1.0, true);
+			if (Moved && currentForce > safeThres1) {
+				healthLeft = healthLeft - 5;
+			}//如果力大于thres1 用刀 并且 motion有数
+		}
+		else if (caitao.Toollist[caitao.currentStep] == brush) {
+
+			//caitaoWidgets.toolparaPercent = ofMap(currentForce, 0.0, forceTotal2, 0.0, 1.0, true);
+			if (Moved  && currentForce > safeThres2) {
+				healthLeft = healthLeft - 5;
+			}//如果力大于thres2 用刷 并且 motion有数
+		}
+		else {
+			//if the tool is dropper , no health deduction wil be done.
+		}
+
+
+
 		caitaoWidgets.workingPercent = ofMap((float)workingLeft, 0.0, (float)workingTotal[caitao.currentStep], 0.0, 1.0, true);
 
 
@@ -333,25 +350,19 @@ void ofApp::update() {
 		}
 
 
+		//printf("Moved = %i \n", Moved);
+		emitP = Moved;
+		if (Moved) {
+			//ofPoint temp = GetMotionCenter();
+			mouse = GetMotionCenter();
+			//printf("x = %f y = %f", temp.x, temp.y);
+		}
 
-
-	
-
-
-
-	//printf("Moved = %i \n", Moved);
-	emitP = Moved;
-	if (Moved) {
-		//ofPoint temp = GetMotionCenter();
-		mouse = GetMotionCenter();
-		//printf("x = %f y = %f", temp.x, temp.y);
-	}
-
-	break;
+		break;
 	}
 	case STEPEND: {
 		if (firsttimeend) {
-			gamelogicsound.load("audio/STEPEND.mp3");
+			gamelogicsound.load("audio/stepend.mp3");
 			gamelogicsound.setVolume(0.7);
 			gamelogicsound.play();
 			caitaoWidgets.update(caitao, stage);
@@ -374,7 +385,9 @@ void ofApp::update() {
 		break;
 	}
 	case END: {
-
+		caitaoWidgets.healthPercent = ofMap(healthLeft, 0.0, healthTotal, 0.0, 1.0, true);
+		caitaoWidgets.recordPercent = ofMap(recordtimes, 0.0, recordTotal, 0.0, 1.0, true);
+		caitaoWidgets.manipPercent = ofMap(errTooltime, 0.0, timeLimit, 1.0, 0.0, true);
 		if (getButtonState(ButtonRestartend)) {
 			stage = START;
 		}
@@ -383,19 +396,19 @@ void ofApp::update() {
 
 	default:
 		printf("something wrong ...stage!=any of the game stages\n"); break;
-}
+	}
 
 
 
 
-//===================Brian=============================
-timer = ofGetElapsedTimeMillis() - startTime;
+	//===================Brian=============================
+	timer = ofGetElapsedTimeMillis() - startTime;
 
 
-particleEffects();
-// set emitParticles to true when dirt is being removed to allow particles to generate
+	particleEffects();
+	// set emitParticles to true when dirt is being removed to allow particles to generate
 
-com.update();
+	com.update();
 
 
 
@@ -424,21 +437,42 @@ void ofApp::draw() {
 		ButtonContinue.draw();
 		break;
 	}
+	case STARTTEXT: {
+		foregroundImage.draw(0, 0);
+		fbo.draw(0, 0);
+		caitaoWidgets.draw(stage);
+		ToolSwitchDraw();
+		ButtonRestartpro.draw();
+		ButtonRecord.draw();
+		break;
+	}
 	case PROCESS: {
 		// FIRST draw the background image
 		//printf("first time process draw\n");
 		foregroundImage.draw(0, 0);
 		// THEN draw the masked fbo on top
 		fbo.draw(0, 0);
-		caitaoWidgets.draw();
+		caitaoWidgets.draw(stage);
 		ToolSwitchDraw();
 		ButtonRestartpro.draw();
-		
-	/*	if (ToolNow != caitao.Toollist[caitao.currentStep] && ToolNow != none) {
-			string wrongstr = "Wrong Tool!";
-			appfont.drawString(wrongstr, 1280 / 2 - 50, 415);
+		ButtonRecord.draw();
+		if (bRecording) {
+			screenshot.draw(320, 200, 640, 400);
 		}
-*/
+		/*	if (ToolNow != caitao.Toollist[caitao.currentStep] && ToolNow != none) {
+				string wrongstr = "Wrong Tool!";
+				appfont.drawString(wrongstr, 1280 / 2 - 50, 415);
+			}
+	*/
+		break;
+	}
+	case STEPEND: {
+		foregroundImage.draw(0, 0);
+		fbo.draw(0, 0);
+		caitaoWidgets.draw(stage);
+		ToolSwitchDraw();
+		ButtonRestartpro.draw();
+		ButtonRecord.draw();
 		break;
 	}
 	case END: {
@@ -446,10 +480,10 @@ void ofApp::draw() {
 		endbackground.draw(0, 0, 1280, 800);
 		ButtonRestartend.draw();
 
-	/*	string scorestr;
-		scorestr = ofToString((int)round(caitaoWidgets.healthPercent * 100));
-		scorestr += "%";*/
-		//appfont.drawString(scorestr, 1280 / 2 - 30, 200);
+		/*	string scorestr;
+			scorestr = ofToString((int)round(caitaoWidgets.healthPercent * 100));
+			scorestr += "%";*/
+			//appfont.drawString(scorestr, 1280 / 2 - 30, 200);
 
 		break;
 	}
@@ -565,7 +599,7 @@ void ofApp::ButtonSetup()
 	ButtonStart.setposition(ofGetWindowWidth() / 2 - ButtonStart.icon.getWidth() / 2, ofGetWindowHeight() - 80 - ButtonStart.icon.getHeight(), ButtonStart.icon.getWidth(), ButtonStart.icon.getHeight());
 	ButtonStart.name = "Start";
 	ButtonStart.toucharea.set((ButtonStart.x + ButtonStart.w / 2 - shiftx) / 6, (ButtonStart.y + ButtonStart.h / 2 - shifty) / 6);
-	
+
 	ButtonContinue.icon.loadImage("interface/Continue.png");
 	ButtonContinue.setposition(ofGetWindowWidth() / 2 - ButtonContinue.icon.getWidth() / 2, ofGetWindowHeight() - 80 - ButtonContinue.icon.getHeight(), ButtonContinue.icon.getWidth(), ButtonContinue.icon.getHeight());
 	ButtonContinue.name = "Continue";
@@ -587,8 +621,8 @@ void ofApp::ButtonSetup()
 	ButtonRecord.name = "Record";
 	ButtonRecord.toucharea.set((ButtonRecord.x + ButtonRecord.w / 2 - shiftx) / 6, (ButtonRecord.y + ButtonRecord.h / 2 - shifty) / 6);
 }
-	
-	
+
+
 bool ofApp::getButtonState(button bu) {
 
 	if (Moved) {
@@ -720,9 +754,9 @@ void ofApp::ToolSwitchDraw()
 		break;
 	}
 	case knife: {
-		if (ToolNow != caitao.Toollist[caitao.currentStep])  
+		if (ToolNow != caitao.Toollist[caitao.currentStep])
 			Knife.icon_err.draw(TSPosition);
-		else 
+		else
 			Knife.icon_on.draw(TSPosition);
 		Brush.icon_off.draw(TSPosition.x, TSPosition.y + Knife.icon_off.getHeight());
 		Dropper.icon_off.draw(TSPosition.x, TSPosition.y + Knife.icon_off.getHeight() * 2);
@@ -734,7 +768,7 @@ void ofApp::ToolSwitchDraw()
 			Brush.icon_err.draw(TSPosition.x, TSPosition.y + Knife.icon_off.getHeight());
 		else
 			Brush.icon_on.draw(TSPosition.x, TSPosition.y + Knife.icon_off.getHeight());
-		
+
 		Dropper.icon_off.draw(TSPosition.x, TSPosition.y + Knife.icon_off.getHeight() * 2);
 		break;
 	}
@@ -752,7 +786,6 @@ void ofApp::ToolSwitchDraw()
 
 void ofApp::resetGameData()
 {
-	processing_status = STARTTEXT;
 	firsttimehere = true;
 	firsttimeend = false;
 	caitao.currentStep = 0;
@@ -1023,7 +1056,7 @@ void Widgets::draw(GameStage status)
 	switch (status) {
 	case START:
 		break;
-	case TUTORIAL:
+	case TUTORIAL: 
 		break;
 	case STARTTEXT: {
 		teachingtext.draw(225, 220);
@@ -1078,15 +1111,15 @@ void Widgets::draw(GameStage status)
 		str += "%";
 		font.drawString(str, 380 + workingBarWidth + 5, 105);
 		ofNoFill();
-		ofRect(379, 29, workingBarWidth + 2, workingBarHeight+2);
+		ofRect(379, 29, workingBarWidth + 2, workingBarHeight + 2);
 		ofFill();
 		break;
 	}
 	case END: {
-		review[0].draw(334,615);
+		review[0].draw(334, 615);
 		review[1].draw(413, 615);
 		review[2].draw(491, 615);
-		
+
 		ofSetColor(180, 180, 180);
 		ofRect(352, 387, scoreBarWidth*recordPercent, scoreBarHeight);
 		ofRect(431, 387, scoreBarWidth*healthPercent, scoreBarHeight);
@@ -1106,8 +1139,8 @@ void Widgets::draw(GameStage status)
 		break;
 	}
 
-					
-	
+
+
 }
 
 

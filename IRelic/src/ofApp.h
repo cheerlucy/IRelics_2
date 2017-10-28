@@ -212,8 +212,9 @@ class ofApp : public ofBaseApp{
 
 		/***************************************   Game Logic   ********************************************/
 		
-		bool firsttimehere=true;
-		bool firsttimeend=false;
+		bool firsttimehere = true;
+		bool firsttimeend = false;
+		bool bRecording = false;
 		//int GameStage;
 		GameStage stage;
 		RelicType relic;
@@ -246,7 +247,8 @@ class ofApp : public ofBaseApp{
 		float healthLeft=5000;
 		int workingTotal[4] = { 4151,4151,1449,4151 };
 		int workingLeft;
-	
+		float recordTotal = 6; //if a user record the picture for more than 6 times, he will get full score in the final recording judgement. 2/4/6 bad/medium/good
+		float recordtimes = 0;
 
 		float forceTotal1= 30;
 		float forceTotal2 = 100;
@@ -263,6 +265,11 @@ class ofApp : public ofBaseApp{
 		float errTooltime=0;
 		float tempbegin=0;
 
+		/********************************** time keeper ******************************************/
+		float tutoLimit = 6000;//2seconds 2000millisecs
+		float tutostarttime = 0;
+		float tutotimer = 0;
+
 		float stependLimit = 4000;//2seconds 2000millisecs
 		float stependstarttime =0;
 		float stependtimer =0;
@@ -270,6 +277,10 @@ class ofApp : public ofBaseApp{
 		float starttextLimit = 6000;//2seconds 2000millisecs
 		float starttextstarttime = 0;
 		float starttexttimer = 0;
+
+		float recordLimit = 1000;//2seconds 2000millisecs
+		float recordstarttime = 0;
+		float recordtimer = 0;
 
 		/****************************************    Button    ********************************************/
 
